@@ -9,7 +9,7 @@ public class BossSpawner : MonoBehaviour
     [Header("Mid Boss Settings")]
     [SerializeField] private GameObject midBossPrefab; 
     [SerializeField] private int firstSpawnScore = 1000;   // 初回およびループ再開時の出現に必要な加算スコア
-    [SerializeField] private int nextSpawnInterval = 6000; // 2回目以降の出現間隔スコア
+    [SerializeField] private int nextSpawnInterval = 6000; // ★ボス撃破後、次の中ボスが出るまでに稼ぐ必要のあるスコア
     [SerializeField] private Vector3 startPosition = new Vector3(0, 8.0f, 0);
 
     [Header("True Boss Settings")]
@@ -58,7 +58,6 @@ public class BossSpawner : MonoBehaviour
             wasBossAlive = false;
             defeatedCount++;
             
-            // ログ出力をC#のモダンな文字列補間（String Interpolation）に修正
             Debug.Log($"中ボス撃破数: {defeatedCount} / {requiredDefeats}");
 
             // 規定数に達したら真のボスをスポーンさせ、中ボスサイクルを一時中断する
@@ -66,6 +65,14 @@ public class BossSpawner : MonoBehaviour
             {
                 SpawnTrueBoss();
                 return; 
+            }
+
+            // ★ここが重要な修正点★
+            // 「ボスが出現した時」ではなく、「ボスを倒した瞬間」のスコアを基準にして、
+            // 次の出現に必要な目標スコア（nextSpawnInterval分）を上乗せして設定します。
+            if (ScoreManager.instance != null)
+            {
+                nextTargetScore = ScoreManager.instance.GetCurrentScore() + nextSpawnInterval;
             }
         }
 
@@ -83,8 +90,8 @@ public class BossSpawner : MonoBehaviour
             currentBoss = Instantiate(midBossPrefab, startPosition, Quaternion.identity);
             wasBossAlive = true; 
             
-            // 次回出現のための目標スコアを更新
-            nextTargetScore = ScoreManager.instance.GetCurrentScore() + nextSpawnInterval;
+            // ★変更点：ここにあった nextTargetScore の計算を、上の「撃破時」に移動しました。
+            // これにより、連戦を確実に防ぐことができます。
         }
     }
 

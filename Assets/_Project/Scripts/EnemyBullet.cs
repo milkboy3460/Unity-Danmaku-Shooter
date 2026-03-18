@@ -1,11 +1,16 @@
 using UnityEngine;
+using UnityEngine.Pool; // GCアロケーションを防ぐためのオブジェクトプーリング用
 
 /// <summary>
-/// 敵が発射する汎用的な弾のクラス。
-/// 生成元（ボスやザコ敵）から進行方向や見た目（属性色）を動的に設定される前提で動作する。
+/// 敵キャラクターが発射する弾の制御クラス。
+/// メモリの動的確保/解放によるGCスパイクを防ぐため、UnityEngine.Poolによる再利用を前提とする。
+/// 進行方向や属性色などは生成元から動的に注入される設計。
 /// </summary>
 public class EnemyBullet : MonoBehaviour
 {
+    // 自身を管理しているオブジェクトプールへの参照
+    private IObjectPool<EnemyBullet> managedPool;
+
     [Header("Settings")]
     [SerializeField] private float speed = 5.0f;
     
@@ -16,9 +21,17 @@ public class EnemyBullet : MonoBehaviour
     private SpriteRenderer spriteRenderer;
 
     /// <summary>
-    /// 弾の見た目（色）を設定する。
-    /// Instantiate直後など、Start()が走る前に外部から呼ばれるケースを想定し、
-    /// 必要に応じてSpriteRendererを動的に取得（遅延初期化）してエラーを防ぐ。
+    /// プール管理元から自身の参照先を注入する。
+    /// </summary>
+    public void SetPool(IObjectPool<EnemyBullet> pool)
+    {
+        managedPool = pool;
+    }
+
+    /// <summary>
+    /// 弾の属性（見た目）を初期化する。
+    /// PoolからGetされた直後（Start実行前）に外部から呼ばれるケースを考慮し、
+    /// SpriteRendererの遅延評価による取得を行ってNullReferenceを防ぐ。
     /// </summary>
     /// <param name="type">スプライト配列のインデックス</param>
     public void SetBulletSprite(int type)
@@ -32,8 +45,8 @@ public class EnemyBullet : MonoBehaviour
     }
 
     /// <summary>
-    /// 弾の進行方向を設定する。
-    /// 確実に指定速度で等速直線運動を行わせるため、受け取ったベクトルを正規化（Normalize）して保持する。
+    /// 進行方向ベクトルを設定する。
+    /// 斜め方向でも速度が変化しないよう、正規化（Normalize）して保持する。
     /// </summary>
     /// <param name="dir">進行方向のベクトル</param>
     public void SetDirection(Vector3 dir)
@@ -49,16 +62,32 @@ public class EnemyBullet : MonoBehaviour
 
     private void OnBecameInvisible()
     {
-        // 画面外に出た不要な弾を自動破棄し、メモリリーク（処理落ち）を防止する
-        Destroy(gameObject);
+        // 画面外へ出たオブジェクトはDestroyせず、プールへ返却して再利用待機状態にする
+        ReleaseToPool();
     }
 
     private void OnTriggerEnter2D(Collider2D collision)
     {
         if (collision.gameObject.CompareTag("Player"))
         {
-            // ダメージ計算などの状態変化はPlayer側の責務とするため、
-            // 弾のスクリプトでは「当たったら自身を消滅させる」処理のみを行う（関心の分離）
+            // プレイヤーへのダメージ計算やエフェクト生成の責務はPlayer/Manager側で持つ（関心の分離）。
+            // 弾自身は「ヒットしたら自身を非アクティブ化してプールへ戻る」処理のみに専念する。
+            ReleaseToPool();
+        }
+    }
+
+    /// <summary>
+    /// 自身をプールへ返却する共通処理。
+    /// </summary>
+    private void ReleaseToPool()
+    {
+        if (managedPool != null)
+        {
+            managedPool.Release(this);
+        }
+        else
+        {
+            // 単体テスト等でプールを経由せずにInstantiateされた場合のフェイルセーフ
             Destroy(gameObject);
         }
     }

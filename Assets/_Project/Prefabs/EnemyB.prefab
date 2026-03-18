@@ -162,10 +162,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   moveSpeed: 2
-  enemyBulletPrefab: {fileID: 438060269827746664, guid: 18bc6a65450bf3e44886b3c4c1994ea1, type: 3}
   fireRate: 2
   scoreValue: 100
-  explosionPrefab: {fileID: 1363478190571487735, guid: 04819b627a20b0840b12a9f4adbbe8a9, type: 3}
   healItemPrefab: {fileID: 4483487593388463640, guid: 214420496b1baf041bacdf96bac552c3, type: 3}
   powerUpItemPrefab: {fileID: 5590488297446864661, guid: a6161107621579e4d9d647386dd4971e, type: 3}
   healDropChance: 100

@@ -4,6 +4,7 @@ using System.Collections;
 /// <summary>
 /// 中ボスの挙動を制御するクラス。
 /// 生成時にランダムに選ばれた属性（色）に応じて、異なる弾幕パターン（Nway, 螺旋, 追尾）を展開する。
+/// ※メモリ負荷対策として、弾と爆発エフェクトの生成をオブジェクトプール（BulletManager）に委譲しています。
 /// </summary>
 public class Boss : MonoBehaviour
 {
@@ -28,7 +29,7 @@ public class Boss : MonoBehaviour
     private int direction = 1;
 
     [Header("Attack Settings")]
-    [SerializeField] private GameObject enemyBulletPrefab;
+    [SerializeField] private GameObject enemyBulletPrefab; 
     [SerializeField] private float fireRate = 1.2f;
     private float fireTimer = 0f;
     private float spiralAngle = 0f; 
@@ -46,12 +47,8 @@ public class Boss : MonoBehaviour
             bossType = Random.Range(0, bossSprites.Length);
             spriteRenderer.sprite = bossSprites[bossType];
             
-            // スプライトの大きさに合わせて当たり判定を動的に自動調整する
             BoxCollider2D col = GetComponent<BoxCollider2D>();
-            if (col != null)
-            {
-                col.size = spriteRenderer.sprite.bounds.size * colliderScale;
-            }
+            if (col != null) col.size = spriteRenderer.sprite.bounds.size * colliderScale;
         }
 
         transform.rotation = Quaternion.Euler(0, 0, 180f);
@@ -61,7 +58,6 @@ public class Boss : MonoBehaviour
     {
         if (!isReady)
         {
-            // 初期位置まで降下するフェーズ
             transform.position += Vector3.down * enterSpeed * Time.deltaTime;
             if (transform.position.y <= stopPositionY)
             {
@@ -91,9 +87,8 @@ public class Boss : MonoBehaviour
 
     private void AttackByColor()
     {
-        if (enemyBulletPrefab == null) return;
+        if (BulletManager.Instance == null) return;
 
-        // 生成時に決定した属性に基づいて弾幕アルゴリズムを分岐
         switch (bossType)
         {
             case 0: ShootSpread(3, 30f); break; 
@@ -101,25 +96,18 @@ public class Boss : MonoBehaviour
             case 2: ShootHoming(); break;       
         }
 
-        if (GameSoundManager.Instance != null)
-        {
-            GameSoundManager.Instance.PlayMidBossShootSound();
-        }
+        if (GameSoundManager.Instance != null) GameSoundManager.Instance.PlayMidBossShootSound();
     }
 
-    /// <summary>
-    /// Nway弾（扇状の拡散弾）を生成する。
-    /// 指定された総角度(angleRange)を弾数で等分し、放射状のベクトルを計算する。
-    /// </summary>
     private void ShootSpread(int count, float angleRange)
     {
         for (int i = 0; i < count; i++)
         {
             float angle = -(angleRange / 2) + (angleRange / (count - 1)) * i;
             Quaternion rotation = Quaternion.Euler(0, 0, angle + 180f);
-            GameObject bullet = Instantiate(enemyBulletPrefab, transform.position, rotation);
             
-            EnemyBullet eb = bullet.GetComponent<EnemyBullet>();
+            // ★変更点：中ボス専用のプールから取得
+            EnemyBullet eb = BulletManager.Instance.SpawnMidBossBullet(transform.position, rotation);
             if (eb != null)
             {
                 eb.SetBulletSprite(0); 
@@ -128,51 +116,36 @@ public class Boss : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 螺旋弾（渦巻き弾）を生成する。
-    /// 発射のたびに基準角度(spiralAngle)をずらし、回転するような軌道を描かせる。
-    /// </summary>
     private void ShootSpiral()
     {
-        // 180度対称の2方向から同時に螺旋を発射する
         for (int i = 0; i < 2; i++)
         {
             float angle = spiralAngle + (i * 180f);
             Quaternion rotation = Quaternion.Euler(0, 0, angle);
-            GameObject bullet = Instantiate(enemyBulletPrefab, transform.position, rotation);
             
-            EnemyBullet eb = bullet.GetComponent<EnemyBullet>();
+            // ★変更点：中ボス専用のプールから取得
+            EnemyBullet eb = BulletManager.Instance.SpawnMidBossBullet(transform.position, rotation);
             if (eb != null)
             {
                 eb.SetBulletSprite(1); 
                 eb.SetDirection(rotation * Vector3.up);
             }
         }
-        // 次回の発射に向けて基準角度を更新（この数値が渦の密度に影響する）
         spiralAngle += 20f;
     }
 
-    /// <summary>
-    /// 自機狙い弾（ホーミング弾）を生成する。
-    /// 発射時点でのプレイヤーの座標を取得し、その方向ベクトル(Atan2)へ向けて射出する。
-    /// </summary>
     private void ShootHoming()
     {
         GameObject player = GameObject.FindWithTag("Player");
         Vector3 targetDir = Vector3.down;
         
-        if (player != null)
-        {
-            targetDir = (player.transform.position - transform.position).normalized;
-        }
+        if (player != null) targetDir = (player.transform.position - transform.position).normalized;
 
-        // 方向ベクトルからZ軸の回転角度を算出
         float angle = Mathf.Atan2(targetDir.y, targetDir.x) * Mathf.Rad2Deg;
         Quaternion rotation = Quaternion.Euler(0, 0, angle - 90f); 
 
-        GameObject bullet = Instantiate(enemyBulletPrefab, transform.position, rotation);
-        
-        EnemyBullet eb = bullet.GetComponent<EnemyBullet>();
+        // ★変更点：中ボス専用のプールから取得
+        EnemyBullet eb = BulletManager.Instance.SpawnMidBossBullet(transform.position, rotation);
         if (eb != null)
         {
             eb.SetBulletSprite(2); 
@@ -184,28 +157,21 @@ public class Boss : MonoBehaviour
     {
         if (collision.gameObject.CompareTag("PlayerBullet"))
         {
-            Destroy(collision.gameObject);
+            collision.gameObject.SetActive(false);
             currentHp--;
 
             if (currentHp <= 0)
             {
-                if (GameSoundManager.Instance != null)
-                {
-                    GameSoundManager.Instance.PlayMidBossExplosionSound();
-                }
+                if (GameSoundManager.Instance != null) GameSoundManager.Instance.PlayMidBossExplosionSound();
 
-                if (explosionPrefab != null) Instantiate(explosionPrefab, transform.position, Quaternion.identity);
+                if (BulletManager.Instance != null) BulletManager.Instance.SpawnExplosion(transform.position, Quaternion.identity);
                 if (ScoreManager.instance != null) ScoreManager.instance.AddScore(scoreValue);
 
                 Destroy(gameObject);
             }
             else
             {
-                if (GameSoundManager.Instance != null)
-                {
-                    GameSoundManager.Instance.PlayMidBossDamageSound();
-                }
-                // ダメージ時の視覚的フィードバック
+                if (GameSoundManager.Instance != null) GameSoundManager.Instance.PlayMidBossDamageSound();
                 StartCoroutine(DamageFlash());
             }
         }

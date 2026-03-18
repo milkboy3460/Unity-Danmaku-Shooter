@@ -1,16 +1,45 @@
 using UnityEngine;
+using System.Collections;
+using UnityEngine.Pool; // 追加
 
 /// <summary>
-/// 生成されたエフェクトを一定時間後に自動破棄し、メモリを解放するクラス
+/// 生成されたエフェクトを一定時間後にプールへ自動返却し、メモリを解放するクラス。
+/// プーリング環境下での再利用を前提に、StartではなくOnEnableでタイマーを管理する。
 /// </summary>
 public class AutoDestroy : MonoBehaviour
 {
-    void Start()
+    private IObjectPool<GameObject> _managedPool;
+    private float lifeTime = 1.0f; // パーティクルの再生時間をカバーする安全マージン
+
+    /// <summary>
+    /// プール管理元から自身の参照先を注入する。
+    /// </summary>
+    public void SetPool(IObjectPool<GameObject> pool)
     {
-        ParticleSystem ps = GetComponent<ParticleSystem>();
-        
-        // パーティクルの再生時間（Duration + StartLifetime）を考慮し、
-        // 演出が完全に終わるよう安全マージンを取って1.0秒後に破棄する
-        Destroy(gameObject, 1.0f);
+        _managedPool = pool;
+    }
+
+    // 使い回されるたびに（SetActive(true)になるたびに）呼ばれる
+    void OnEnable()
+    {
+        StartCoroutine(DestroyRoutine());
+    }
+
+    private IEnumerator DestroyRoutine()
+    {
+        yield return new WaitForSeconds(lifeTime);
+        ReleaseToPool();
+    }
+
+    private void ReleaseToPool()
+    {
+        if (_managedPool != null)
+        {
+            _managedPool.Release(gameObject);
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 }

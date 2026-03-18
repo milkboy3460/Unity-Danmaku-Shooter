@@ -2,6 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// 一般的な敵キャラクターの挙動（移動・攻撃・被弾・ドロップ）を管理するクラス。
+/// 大量に出現するため、弾とエフェクトのプーリング化による恩恵が最も大きいクラス。
 /// </summary>
 public class Enemy : MonoBehaviour
 {
@@ -9,15 +10,11 @@ public class Enemy : MonoBehaviour
     [SerializeField] private float moveSpeed = 3.0f;
 
     [Header("Attack Settings")]
-    [SerializeField] private GameObject enemyBulletPrefab;
     [SerializeField] private float fireRate = 2.0f;
     private float fireTimer = 0f;
 
-    [Header("Score & Effects")]
+    [Header("Score & Drop Settings")]
     [SerializeField] private int scoreValue = 100;
-    [SerializeField] private GameObject explosionPrefab;
-
-    [Header("Drop Item Settings")]
     [SerializeField] private GameObject healItemPrefab;
     [SerializeField] private GameObject powerUpItemPrefab;
     [SerializeField] [Range(0f, 100f)] private float healDropChance = 10f;  
@@ -43,9 +40,10 @@ public class Enemy : MonoBehaviour
 
     private void Shoot()
     {
-        if (enemyBulletPrefab != null)
+        // 変更点: BulletManagerへ生成を委譲
+        if (BulletManager.Instance != null)
         {
-            Instantiate(enemyBulletPrefab, transform.position, Quaternion.identity);
+            BulletManager.Instance.SpawnEnemyBullet(transform.position, Quaternion.identity);
         }
     }
 
@@ -53,26 +51,20 @@ public class Enemy : MonoBehaviour
     {
         if (collision.gameObject.CompareTag("PlayerBullet"))
         {
-            Destroy(collision.gameObject);
+            // 変更点: 自機弾はDestroyせず非アクティブ化し、プールへ返す
+            collision.gameObject.SetActive(false);
 
-            if (explosionPrefab != null)
+            // 爆発エフェクトをプールから展開
+            if (BulletManager.Instance != null)
             {
-                Instantiate(explosionPrefab, transform.position, Quaternion.identity);
+                BulletManager.Instance.SpawnExplosion(transform.position, Quaternion.identity);
             }
 
-            if (ScoreManager.instance != null)
-            {
-                ScoreManager.instance.AddScore(scoreValue);
-            }
+            if (ScoreManager.instance != null) ScoreManager.instance.AddScore(scoreValue);
 
             DropItem();
 
-            // 自身（Enemyオブジェクト）はこの直後に破棄されるため、
-            // 音切れを防ぐ目的で永続的に存在するSoundManagerへ再生処理を委譲する
-            if (GameSoundManager.Instance != null)
-            {
-                GameSoundManager.Instance.PlayExplosionSound();
-            }
+            if (GameSoundManager.Instance != null) GameSoundManager.Instance.PlayExplosionSound();
 
             Destroy(gameObject); 
         }
@@ -80,20 +72,15 @@ public class Enemy : MonoBehaviour
 
     /// <summary>
     /// 撃破時のアイテムドロップ判定。
-    /// 複数のアイテムが同時にドロップするのを防ぐため、排他的な確率抽選を行う。
     /// </summary>
     private void DropItem()
     {
-        // 希少価値の高いパワーアップアイテムから優先して抽選
         if (powerUpItemPrefab != null && Random.Range(0f, 100f) <= powerUpDropChance)
         {
             Instantiate(powerUpItemPrefab, transform.position, Quaternion.identity);
-            
-            // 当選した場合は早期リターン（Early Return）し、以降の抽選をスキップする
             return; 
         }
 
-        // パワーアップの抽選に漏れた場合のみ、回復アイテムの抽選を行う（フォールバック）
         if (healItemPrefab != null && Random.Range(0f, 100f) <= healDropChance)
         {
             Instantiate(healItemPrefab, transform.position, Quaternion.identity);

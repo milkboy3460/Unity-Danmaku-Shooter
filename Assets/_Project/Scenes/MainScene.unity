@@ -151,8 +151,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b3fc0e2f21fb1254f92d4d1c1c5dcdb4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  baseUrl: https://unity-tetris-server.onrender.com/api
   rankingTexts: []
   loadingPopup: {fileID: 0}
+  statsNameText: {fileID: 0}
+  statsPlayCountText: {fileID: 0}
+  statsHighScoreText: {fileID: 0}
+  statsHistoryTexts: []
+  statsLoadingPopup: {fileID: 0}
 --- !u!4 &41172677
 Transform:
   m_ObjectHideFlags: 0
@@ -1019,7 +1025,6 @@ MonoBehaviour:
   maxX: 4.12
   minY: -7.59
   maxY: 7.59
-  bulletPrefab: {fileID: 85538719516622496, guid: e3043da26e8291b4e916c99eca51f247, type: 3}
   fireRate: 0.3
   minFireRate: 0.02
   powerUpAmount: 0.04
@@ -1027,7 +1032,6 @@ MonoBehaviour:
   maxHP: 3
   hpDisplay: {fileID: 426132045}
   invincibleTime: 1.5
-  explosionPrefab: {fileID: 1363478190571487735, guid: 04819b627a20b0840b12a9f4adbbe8a9, type: 3}
 --- !u!58 &719331235
 CircleCollider2D:
   m_ObjectHideFlags: 0
@@ -1448,6 +1452,55 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   scrollSpeed: 3
   loopDistance: 18.55
+--- !u!1 &1210773742
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1210773744}
+  - component: {fileID: 1210773743}
+  m_Layer: 0
+  m_Name: BulletManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1210773743
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1210773742}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9c6b59287bf16094a80c0080fa7584e5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  playerBulletPrefab: {fileID: 8485531299536038831, guid: e3043da26e8291b4e916c99eca51f247, type: 3}
+  enemyBulletPrefab: {fileID: 2720473017199346669, guid: 18bc6a65450bf3e44886b3c4c1994ea1, type: 3}
+  bossBulletPrefab: {fileID: 8798645974582219381, guid: cf484958b2cc32947ba6fe7a7b3f8470, type: 3}
+  trueBossBulletPrefab: {fileID: 8798645974582219381, guid: cf484958b2cc32947ba6fe7a7b3f8470, type: 3}
+  explosionPrefab: {fileID: 1363478190571487735, guid: 04819b627a20b0840b12a9f4adbbe8a9, type: 3}
+--- !u!4 &1210773744
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1210773742}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 232.27155, y: 468.54904, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1215048170
 GameObject:
   m_ObjectHideFlags: 0
@@ -1482,7 +1535,7 @@ MonoBehaviour:
   nextSpawnInterval: 6000
   startPosition: {x: 0, y: 7, z: 0}
   trueBossPrefab: {fileID: 3305142737695459480, guid: 13e0b145898bc6440b6e20b7ae7ceb3f, type: 3}
-  requiredDefeats: 1
+  requiredDefeats: 3
 --- !u!4 &1215048172
 Transform:
   m_ObjectHideFlags: 0
@@ -2938,3 +2991,4 @@ SceneRoots:
   - {fileID: 1215048172}
   - {fileID: 2026548803}
   - {fileID: 41172677}
+  - {fileID: 1210773744}
