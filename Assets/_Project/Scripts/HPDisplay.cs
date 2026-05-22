@@ -1,9 +1,9 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-/// <summary>
-/// プレイヤーの現在HPに応じて、UI上のライフ（ハートアイコン）の表示状態を管理するクラス。
-/// </summary>
+// 画面上のHPバー（ハートアイコン）の見た目を更新するだけのクラス。
+// HPの数値管理はPlayer側に任せ、UI側は「言われた数だけ赤くする」という
+// 受動的な役割（Passive View）に徹することで、ロジックと描画をきっちり分離している。
 public class HPDisplay : MonoBehaviour
 {
     [Header("UI References")]
@@ -13,16 +13,12 @@ public class HPDisplay : MonoBehaviour
     [SerializeField] private Sprite redHeart;
     [SerializeField] private Sprite blackHeart;
 
-    /// <summary>
-    /// 現在のHP値を受け取り、UIの表示を同期する。
-    /// Player側のダメージ処理や回復処理のコールバックとして呼ばれる想定。
-    /// </summary>
-    /// <param name="currentHP">更新後の現在HP値</param>
+    // Player側でダメージを受けたり回復したりした時に、セットで呼ばれる処理。
     public void UpdateHP(int currentHP)
     {
         for (int i = 0; i < heartImages.Length; i++)
         {
-            // インデックスが現在HPの範囲内であれば点灯、範囲外であれば消灯状態のスプライトを割り当てる
+            // 今のHPの数までは赤いハート、それ以降は黒いハート（空っぽ）の画像を割り当てる
             if (i < currentHP)
             {
                 heartImages[i].sprite = redHeart;

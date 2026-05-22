@@ -1,39 +1,31 @@
 using UnityEngine;
-using UnityEngine.Pool; // GCアロケーションを防ぐためのオブジェクトプーリング用
+using UnityEngine.Pool; // GC（ゴミ集め）でカクつくのを防ぐためのプーリング用
 
-/// <summary>
-/// 敵キャラクターが発射する弾の制御クラス。
-/// メモリの動的確保/解放によるGCスパイクを防ぐため、UnityEngine.Poolによる再利用を前提とする。
-/// 進行方向や属性色などは生成元から動的に注入される設計。
-/// </summary>
+// 敵や中ボスが撃ってくる弾のクラス。
+// 大量に出るので、いちいちDestroyせずにプール（BulletManager）に返して使い回す設計。
 public class EnemyBullet : MonoBehaviour
 {
-    // 自身を管理しているオブジェクトプールへの参照
+    // 自分が帰るプール
     private IObjectPool<EnemyBullet> managedPool;
 
     [Header("Settings")]
     [SerializeField] private float speed = 5.0f;
     
-    // 攻撃属性に応じたスプライトのバリエーション（0:赤, 1:緑, 2:青）
+    // 中ボスが撃つ弾の色分け用（0:赤, 1:緑, 2:青）
     [SerializeField] private Sprite[] bulletSprites; 
     
     private Vector3 moveDirection = Vector3.down;
     private SpriteRenderer spriteRenderer;
 
-    /// <summary>
-    /// プール管理元から自身の参照先を注入する。
-    /// </summary>
+    // どこに帰るか（プール元）をセットする
     public void SetPool(IObjectPool<EnemyBullet> pool)
     {
         managedPool = pool;
     }
 
-    /// <summary>
-    /// 弾の属性（見た目）を初期化する。
-    /// PoolからGetされた直後（Start実行前）に外部から呼ばれるケースを考慮し、
-    /// SpriteRendererの遅延評価による取得を行ってNullReferenceを防ぐ。
-    /// </summary>
-    /// <param name="type">スプライト配列のインデックス</param>
+    // 弾の見た目（色）を変える処理。
+    // プールから出た直後（Startが走る前）に呼ばれることがあるので、
+    // ここで毎回nullチェックしてエラー（NullReferenceException）を防いでいる。
     public void SetBulletSprite(int type)
     {
         if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
@@ -44,11 +36,8 @@ public class EnemyBullet : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 進行方向ベクトルを設定する。
-    /// 斜め方向でも速度が変化しないよう、正規化（Normalize）して保持する。
-    /// </summary>
-    /// <param name="dir">進行方向のベクトル</param>
+    // 飛んでいく方向をセットする。
+    // 斜めに撃ち出された時に弾の速度が速くならないように、必ず正規化（Normalize）しておく。
     public void SetDirection(Vector3 dir)
     {
         moveDirection = dir.normalized;
@@ -56,13 +45,13 @@ public class EnemyBullet : MonoBehaviour
 
     void Update()
     {
-        // フレームレートに依存しない等速直線運動
+        // フレームレートに依存しないようにTime.deltaTimeを掛けて進ませる
         transform.position += moveDirection * speed * Time.deltaTime;
     }
 
     private void OnBecameInvisible()
     {
-        // 画面外へ出たオブジェクトはDestroyせず、プールへ返却して再利用待機状態にする
+        // 画面の外に出たら、もう見えないのでプールに回収する
         ReleaseToPool();
     }
 
@@ -70,15 +59,13 @@ public class EnemyBullet : MonoBehaviour
     {
         if (collision.gameObject.CompareTag("Player"))
         {
-            // プレイヤーへのダメージ計算やエフェクト生成の責務はPlayer/Manager側で持つ（関心の分離）。
-            // 弾自身は「ヒットしたら自身を非アクティブ化してプールへ戻る」処理のみに専念する。
+            // プレイヤーに当たった時のダメージ計算やエフェクト生成は、ここではなくPlayer側に任せる。
+            // 弾の役割は「当たったら消える（プールに帰る）」ことだけに専念させて、コードを疎結合に保つ。
             ReleaseToPool();
         }
     }
 
-    /// <summary>
-    /// 自身をプールへ返却する共通処理。
-    /// </summary>
+    // プールへ戻す共通処理
     private void ReleaseToPool()
     {
         if (managedPool != null)
@@ -87,7 +74,7 @@ public class EnemyBullet : MonoBehaviour
         }
         else
         {
-            // 単体テスト等でプールを経由せずにInstantiateされた場合のフェイルセーフ
+            // プールを使わずに直接Instantiateしてテストした時などのための保険
             Destroy(gameObject);
         }
     }

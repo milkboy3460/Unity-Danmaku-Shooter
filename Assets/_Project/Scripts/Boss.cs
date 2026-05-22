@@ -1,11 +1,10 @@
 using UnityEngine;
 using System.Collections;
 
-/// <summary>
-/// 中ボスの挙動を制御するクラス。
-/// 生成時にランダムに選ばれた属性（色）に応じて、異なる弾幕パターン（Nway, 螺旋, 追尾）を展開する。
-/// ※メモリ負荷対策として、弾と爆発エフェクトの生成をオブジェクトプール（BulletManager）に委譲しています。
-/// </summary>
+// 中ボスのコントロール用クラス。
+// 出現時に色（赤・緑・青）をランダムで決めて、色ごとに違うパターンの弾幕を撃たせる。
+// ※弾や爆発エフェクトを毎回Instantiate/Destroyするとガベージコレクションが走ってカクつく原因になるため、
+// 生成処理はBulletManager（オブジェクトプール）に任せている。
 public class Boss : MonoBehaviour
 {
     [Header("Status")]
@@ -47,6 +46,7 @@ public class Boss : MonoBehaviour
             bossType = Random.Range(0, bossSprites.Length);
             spriteRenderer.sprite = bossSprites[bossType];
             
+            // 選ばれたスプライト（画像）の大きさに合わせて、当たり判定のサイズも自動調整する
             BoxCollider2D col = GetComponent<BoxCollider2D>();
             if (col != null) col.size = spriteRenderer.sprite.bounds.size * colliderScale;
         }
@@ -58,6 +58,7 @@ public class Boss : MonoBehaviour
     {
         if (!isReady)
         {
+            // まずは画面上部から指定の高さまで降りてくる（入場演出）
             transform.position += Vector3.down * enterSpeed * Time.deltaTime;
             if (transform.position.y <= stopPositionY)
             {
@@ -67,6 +68,7 @@ public class Boss : MonoBehaviour
         }
         else
         {
+            // 定位置に着いたら、左右への移動と攻撃をスタートする
             MoveAction();
             
             fireTimer += Time.deltaTime;
@@ -80,6 +82,7 @@ public class Boss : MonoBehaviour
 
     private void MoveAction()
     {
+        // 画面の端から端を反復横飛びさせる
         transform.position += Vector3.right * direction * moveSpeedX * Time.deltaTime;
         if (transform.position.x >= rightLimit) direction = -1;
         else if (transform.position.x <= leftLimit) direction = 1;
@@ -103,10 +106,11 @@ public class Boss : MonoBehaviour
     {
         for (int i = 0; i < count; i++)
         {
+            // 扇状に弾を綺麗に散らすための角度計算
             float angle = -(angleRange / 2) + (angleRange / (count - 1)) * i;
             Quaternion rotation = Quaternion.Euler(0, 0, angle + 180f);
             
-            // ★変更点：中ボス専用のプールから取得
+            // ★弾を新規作成せず、中ボス専用のプールから引っ張ってくる（負荷対策）
             EnemyBullet eb = BulletManager.Instance.SpawnMidBossBullet(transform.position, rotation);
             if (eb != null)
             {
@@ -123,7 +127,7 @@ public class Boss : MonoBehaviour
             float angle = spiralAngle + (i * 180f);
             Quaternion rotation = Quaternion.Euler(0, 0, angle);
             
-            // ★変更点：中ボス専用のプールから取得
+            // ★ここもプールから取得
             EnemyBullet eb = BulletManager.Instance.SpawnMidBossBullet(transform.position, rotation);
             if (eb != null)
             {
@@ -131,11 +135,13 @@ public class Boss : MonoBehaviour
                 eb.SetDirection(rotation * Vector3.up);
             }
         }
+        // 撃つたびに基準の角度をズラすことで、渦巻き状の弾幕にする
         spiralAngle += 20f;
     }
 
     private void ShootHoming()
     {
+        // 撃つ瞬間のプレイヤーの位置を計算して狙い撃つ
         GameObject player = GameObject.FindWithTag("Player");
         Vector3 targetDir = Vector3.down;
         
@@ -144,7 +150,7 @@ public class Boss : MonoBehaviour
         float angle = Mathf.Atan2(targetDir.y, targetDir.x) * Mathf.Rad2Deg;
         Quaternion rotation = Quaternion.Euler(0, 0, angle - 90f); 
 
-        // ★変更点：中ボス専用のプールから取得
+        // ★ここもプールから取得
         EnemyBullet eb = BulletManager.Instance.SpawnMidBossBullet(transform.position, rotation);
         if (eb != null)
         {
@@ -155,6 +161,7 @@ public class Boss : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D collision)
     {
+        // プレイヤーの弾が当たった時の処理
         if (collision.gameObject.CompareTag("PlayerBullet"))
         {
             collision.gameObject.SetActive(false);
@@ -164,6 +171,7 @@ public class Boss : MonoBehaviour
             {
                 if (GameSoundManager.Instance != null) GameSoundManager.Instance.PlayMidBossExplosionSound();
 
+                // 倒した時。爆発エフェクトも生成(Instantiate)すると重いのでプールから借りる
                 if (BulletManager.Instance != null) BulletManager.Instance.SpawnExplosion(transform.position, Quaternion.identity);
                 if (ScoreManager.instance != null) ScoreManager.instance.AddScore(scoreValue);
 
@@ -172,6 +180,7 @@ public class Boss : MonoBehaviour
             else
             {
                 if (GameSoundManager.Instance != null) GameSoundManager.Instance.PlayMidBossDamageSound();
+                // ダメージが入っていることが視覚的に分かるように赤く光らせる
                 StartCoroutine(DamageFlash());
             }
         }

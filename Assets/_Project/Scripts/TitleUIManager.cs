@@ -5,11 +5,7 @@ using UnityEngine.SceneManagement;
 using TMPro;
 using System.Collections;
 
-/// <summary>
-/// タイトル画面のユーザーインターフェースと進行状態を管理するクラス。
-/// プレイヤー名の登録、メニュー遷移、ランキング/戦績ポップアップの制御を担う。
-/// </summary>
-[RequireComponent(typeof(AudioSource))]
+// タイトル画面のUI操作と、プレイヤー名の登録・シーン遷移を管理するクラス。
 public class TitleUIManager : MonoBehaviour
 {
     [Header("UI Components")]
@@ -19,19 +15,12 @@ public class TitleUIManager : MonoBehaviour
     public Image rankingImage;  
     public Image statsImage;    
     public GameObject rankingPopup; 
-    public GameObject statsPopup;   
-
-    [Header("Cursor Settings")]
-    [SerializeField] private RectTransform arrow;          
-    [SerializeField] private RectTransform startPos;        
-    [SerializeField] private RectTransform rankingPos;      
-    [SerializeField] private RectTransform statsPos;        
+    public GameObject statsPopup;  
 
     [Header("Visual Effects")]
-    [SerializeField] private BlinkEffect startEffect;     
-    [SerializeField] private BlinkEffect rankingEffect;   
-    [SerializeField] private BlinkEffect statsEffect;     
-    [SerializeField] private BlinkEffect arrowEffect;     
+    [SerializeField] private BlinkEffect startEffect;    
+    [SerializeField] private BlinkEffect rankingEffect;  
+    [SerializeField] private BlinkEffect statsEffect;    
 
     [Header("Audio Settings")]
     [SerializeField] private AudioClip moveSound;   
@@ -40,7 +29,6 @@ public class TitleUIManager : MonoBehaviour
     
     private AudioSource audioSource;
 
-    // 名前入力済みフラグ（静的プロパティとして管理）
     public static bool IsNameConfirmed = false;
     private int currentIndex = 0; 
     private int maxMenuIndex = 2; // 0:START, 1:RANKING, 2:STATS
@@ -50,23 +38,20 @@ public class TitleUIManager : MonoBehaviour
 
     void Start()
     {
-        // アプリケーション全体の状態リセット
         Time.timeScale = 1f;
         audioSource = GetComponent<AudioSource>();
         
-        // 初期状態のクリーンアップ
         if (rankingPopup != null) rankingPopup.SetActive(false);
         if (statsPopup != null) statsPopup.SetActive(false);
         if (errorText != null) errorText.text = "";
-        if (arrow != null) arrow.gameObject.SetActive(false);
 
-        // ローカルストレージ（PlayerPrefs）から保存済みの名前をロード
+        // 前回の起動時に使った名前をローカルからロードしておく（ユーザーの入力の手間を減らすUX）
         string savedName = PlayerPrefs.GetString("SavedPlayerName", "");
         PlayerNameManager.PlayerName = savedName;
 
         if (!string.IsNullOrEmpty(savedName))
         {
-            // 名前が存在する場合は直接メニュー操作へ移行
+            // すでに名前が登録済みなら、入力画面を飛ばしてすぐにメニューを操作できるようにする
             IsNameConfirmed = true;
             canInteractMenu = true; 
             if (nameInputField != null) nameInputField.gameObject.SetActive(false);
@@ -77,10 +62,10 @@ public class TitleUIManager : MonoBehaviour
         }
         else
         {
-            // 名前が未登録の場合は入力フィールドを優先表示
+            // 初回起動時は名前入力を強制させる
             IsNameConfirmed = false; 
             canInteractMenu = false;
-            SetMenuColor(new Color(0.3f, 0.3f, 0.3f, 1f)); // 未入力時はメニューをグレーアウト
+            SetMenuColor(new Color(0.3f, 0.3f, 0.3f, 1f)); // 名前未入力時はメニューを暗くして操作不可にする
             
             if (nameInputField != null)
             {
@@ -94,7 +79,6 @@ public class TitleUIManager : MonoBehaviour
 
     private void OnDestroy()
     {
-        // メモリリーク防止のためイベントリスナーを解除
         if (nameInputField != null)
         {
             nameInputField.onSubmit.RemoveListener(OnNameSubmit);
@@ -103,10 +87,17 @@ public class TitleUIManager : MonoBehaviour
 
     void Update()
     {
-        // 名前確定前は操作を受け付けない
+        // 【デバッグ用】Rキーで名前セーブを消して最初からやり直せるようにしておく
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            PlayerPrefs.DeleteKey("SavedPlayerName");
+            PlayerPrefs.Save();
+            SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        }
+
         if (!IsNameConfirmed) return;
 
-        // ポップアップ（モーダル）表示中の排他制御
+        // ポップアップが出ている時はメニュー操作をブロックする
         if (isPopupOpen)
         {
             if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Escape))
@@ -118,7 +109,6 @@ public class TitleUIManager : MonoBehaviour
             return;
         }
 
-        // 入力直後の誤操作防止バッファ
         if (!canInteractMenu)
         {
             if (Input.GetKeyUp(KeyCode.Space) || Input.GetKeyUp(KeyCode.Return))
@@ -128,7 +118,7 @@ public class TitleUIManager : MonoBehaviour
             return; 
         }
 
-        // キーボード/コントローラーによるメニュー選択制御
+        // キー入力でメニュー移動（上下）
         if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W))
         {
             currentIndex--;
@@ -144,6 +134,7 @@ public class TitleUIManager : MonoBehaviour
             PlaySound(moveSound);
         }
 
+        // 決定操作
         if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))
         {
             PlaySound(submitSound);
@@ -151,38 +142,25 @@ public class TitleUIManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 現在の選択インデックスに基づいてカーソル位置と視覚エフェクトを更新する。
-    /// </summary>
+    // 選択肢の点滅（BlinkEffect）を切り替える
     private void UpdateSelection()
     {
-        if (!IsNameConfirmed || arrow == null) return;
+        if (!IsNameConfirmed) return;
 
-        if (currentIndex == 0 && startPos != null) arrow.position = startPos.position;
-        else if (currentIndex == 1 && rankingPos != null) arrow.position = rankingPos.position;
-        else if (currentIndex == 2 && statsPos != null) arrow.position = statsPos.position;
-
-        arrow.gameObject.SetActive(true);
-
-        // 選択中の要素に対してのみ点滅エフェクト（BlinkEffect）を有効化
         if (startEffect != null) startEffect.SetSelected(currentIndex == 0);
         if (rankingEffect != null) rankingEffect.SetSelected(currentIndex == 1);
         if (statsEffect != null) statsEffect.SetSelected(currentIndex == 2);
-        if (arrowEffect != null) arrowEffect.SetSelected(true);
     }
 
-    /// <summary>
-    /// 入力されたプレイヤー名のバリデーションおよびサーバー登録を行う。
-    /// </summary>
+    // 名前を入力してEnterを押した時の処理
     private void OnNameSubmit(string text)
     {
         if (text.Length > 0)
         {
             string upperName = text.ToUpper();
-            
-            // 通信中の多重送信（二重登録）を防止するためのUIロック
-            nameInputField.interactable = false; 
+            nameInputField.interactable = false; // 送信中は連打できないようにする
 
+            // サーバーに名前を登録して重複チェックを行う
             RankingNetworkManager rankingManager = FindObjectOfType<RankingNetworkManager>();
             if (rankingManager != null)
             {
@@ -190,7 +168,6 @@ public class TitleUIManager : MonoBehaviour
                 {
                     if (isSuccess)
                     {
-                        // サーバー登録成功：ローカルに名前を永続化しメニューへ
                         PlayerNameManager.PlayerName = upperName;
                         PlayerPrefs.SetString("SavedPlayerName", upperName);
                         PlayerPrefs.Save();
@@ -198,10 +175,9 @@ public class TitleUIManager : MonoBehaviour
                     }
                     else
                     {
-                        // 重複エラー：エラーフィードバックを表示し入力を再開させる
+                        // サーバー側で名前が既に使われていたらエラーを表示
                         if (errorText != null) errorText.text = "NAME ALREADY TAKEN";
                         PlaySound(errorSound);
-                        
                         nameInputField.interactable = true;
                         nameInputField.text = "";
                         nameInputField.Select();
@@ -212,15 +188,13 @@ public class TitleUIManager : MonoBehaviour
         }
         else
         {
-            // 空文字送信時のフォールバック
+            // 名前が空ならフォーカスを戻して再入力させる
             nameInputField.Select();
             nameInputField.ActivateInputField();
         }
     }
 
-    /// <summary>
-    /// 入力確定後、EventSystemの選択状態をクリアし安全にメニュー操作へ移行させるためのコルーチン。
-    /// </summary>
+    // 遷移時に発生するEventSystemのバグを回避するため、少しだけ待ってから遷移する
     private IEnumerator SafeTransitionToMenu()
     {
         if (EventSystem.current != null) EventSystem.current.SetSelectedGameObject(null);
@@ -237,21 +211,13 @@ public class TitleUIManager : MonoBehaviour
         UpdateSelection();
     }
 
-    /// <summary>
-    /// 選択中のメニュー項目に応じたアクションを実行する。
-    /// </summary>
     private void ExecuteSelection()
     {
-        if (currentIndex == 0)
-        {
-            SceneManager.LoadScene("MainScene"); 
-        }
+        if (currentIndex == 0) SceneManager.LoadScene("MainScene"); 
         else if (currentIndex == 1)
         {
             isPopupOpen = true;
             if (rankingPopup != null) rankingPopup.SetActive(true);
-            
-            // 非同期でのランキング取得リクエスト
             RankingNetworkManager rankingManager = FindObjectOfType<RankingNetworkManager>();
             if (rankingManager != null) rankingManager.FetchRanking();
         }
@@ -259,8 +225,6 @@ public class TitleUIManager : MonoBehaviour
         {
             isPopupOpen = true;
             if (statsPopup != null) statsPopup.SetActive(true);
-            
-            // 非同期での個人戦績取得リクエスト
             RankingNetworkManager rankingManager = FindObjectOfType<RankingNetworkManager>();
             if (rankingManager != null) rankingManager.FetchPlayerStats(PlayerNameManager.PlayerName);
         }

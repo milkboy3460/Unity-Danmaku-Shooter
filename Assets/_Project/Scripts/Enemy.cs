@@ -1,9 +1,8 @@
 using UnityEngine;
 
-/// <summary>
-/// 一般的な敵キャラクターの挙動（移動・攻撃・被弾・ドロップ）を管理するクラス。
-/// 大量に出現するため、弾とエフェクトのプーリング化による恩恵が最も大きいクラス。
-/// </summary>
+// ザコ敵の基本クラス（移動・攻撃・被弾・アイテムドロップ）。
+// 画面上に一番大量に出現するオブジェクトなので、こいつが弾やエフェクトを毎回
+// Instantiateすると激重になる。そのため、弾などは全てプール（BulletManager）から借りている。
 public class Enemy : MonoBehaviour
 {
     [Header("Movement Settings")]
@@ -22,6 +21,7 @@ public class Enemy : MonoBehaviour
 
     void Update()
     {
+        // ひたすら下に向かって進む
         transform.position += Vector3.down * moveSpeed * Time.deltaTime;
 
         fireTimer += Time.deltaTime;
@@ -31,7 +31,8 @@ public class Enemy : MonoBehaviour
             fireTimer = 0f;
         }
 
-        // 画面下部の死角領域へ到達した際、オブジェクトを破棄してメモリリークを防ぐ
+        // 画面の下端（見えない位置）まで行ったら自分自身を消す。
+        // これを忘れると、画面外の見えない敵が無限にメモリに溜まってしまいゲームが落ちる。
         if (transform.position.y < -15.0f)
         {
             Destroy(gameObject);
@@ -40,7 +41,8 @@ public class Enemy : MonoBehaviour
 
     private void Shoot()
     {
-        // 変更点: BulletManagerへ生成を委譲
+        // 弾を撃つ処理。
+        // 重いInstantiateは使わず、BulletManagerに頼んでプールしてある弾を借りてくる。
         if (BulletManager.Instance != null)
         {
             BulletManager.Instance.SpawnEnemyBullet(transform.position, Quaternion.identity);
@@ -49,12 +51,13 @@ public class Enemy : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D collision)
     {
+        // プレイヤーの弾が当たった時の処理
         if (collision.gameObject.CompareTag("PlayerBullet"))
         {
-            // 変更点: 自機弾はDestroyせず非アクティブ化し、プールへ返す
+            // 自機弾はプールで使い回す仕組みなので、Destroyで完全に消さずに非アクティブ化してプールへ返す
             collision.gameObject.SetActive(false);
 
-            // 爆発エフェクトをプールから展開
+            // 爆発エフェクトも毎回作ると重いのでプールから引っ張ってくる
             if (BulletManager.Instance != null)
             {
                 BulletManager.Instance.SpawnExplosion(transform.position, Quaternion.identity);
@@ -70,17 +73,18 @@ public class Enemy : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 撃破時のアイテムドロップ判定。
-    /// </summary>
+    // 倒された時のアイテムドロップ判定
     private void DropItem()
     {
+        // まずパワーアップの抽選をする。
+        // 当たった場合はreturnで処理を抜ける（パワーアップと回復が同時にドロップして重なるのを防ぐため）
         if (powerUpItemPrefab != null && Random.Range(0f, 100f) <= powerUpDropChance)
         {
             Instantiate(powerUpItemPrefab, transform.position, Quaternion.identity);
             return; 
         }
 
+        // パワーアップが落ちなかった場合のみ、回復アイテムの抽選を行う
         if (healItemPrefab != null && Random.Range(0f, 100f) <= healDropChance)
         {
             Instantiate(healItemPrefab, transform.position, Quaternion.identity);

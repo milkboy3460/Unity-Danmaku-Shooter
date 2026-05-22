@@ -1,10 +1,8 @@
 using UnityEngine;
 using TMPro;
 
-/// <summary>
-/// スコアの計算およびハイスコアの永続化を管理するマネージャークラス。
-/// シングルトンパターンにより、ゲーム内のどこからでもスコア加算を可能にする。
-/// </summary>
+// スコア計算とハイスコアの保存（永続化）を管理するクラス。
+// ゲーム中どこからでもスコアを足せるようにシングルトンにしている。
 public class ScoreManager : MonoBehaviour
 {
     public static ScoreManager instance;
@@ -21,10 +19,9 @@ public class ScoreManager : MonoBehaviour
 
     void Awake()
     {
-        // 簡易的なシングルトンの初期化
         instance = this;
         
-        // 起動時に保存済みのハイスコアをロードする
+        // 起動時、端末内に保存されているハイスコアを引っ張り出す
         hiScore = PlayerPrefs.GetInt(hiScoreKey, 0);
     }
 
@@ -34,22 +31,20 @@ public class ScoreManager : MonoBehaviour
         UpdateHiScoreText();
     }
 
-    /// <summary>
-    /// スコアを加算し、必要に応じてハイスコアを更新・保存する。
-    /// </summary>
-    /// <param name="scoreToAdd">加算するスコア値</param>
+    // スコア加算処理。
     public void AddScore(int scoreToAdd)
     {
         currentScore += scoreToAdd;
         UpdateScoreText();
 
-        // 現在のスコアがハイスコアを更新した際、リアルタイムで保存処理を行う
+        // 現在のスコアがハイスコアを抜いた時だけ更新する
         if (currentScore > hiScore)
         {
             hiScore = currentScore;
             UpdateHiScoreText();
             
-            // PlayerPrefsを用いてローカルにデータを永続化
+            // 【重要】
+            // アプリが突然落ちてもデータが消えないように、更新のたびにローカルへ即保存(Save)する
             PlayerPrefs.SetInt(hiScoreKey, hiScore);
             PlayerPrefs.Save();
         }
@@ -64,7 +59,7 @@ public class ScoreManager : MonoBehaviour
     {
         if (scoreText != null)
         {
-            // 6桁のゼロ埋め（D6）でアーケードライクな表示形式に整える
+            // アーケードゲームっぽく、6桁のゼロ埋め（D6）にして表示を整える
             scoreText.text = "SCORE: " + currentScore.ToString("D6");
         }
     }
@@ -77,9 +72,7 @@ public class ScoreManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 現在のスコアをリセットする。リトライ時などの呼び出しを想定。
-    /// </summary>
+    // リトライ時などにスコアを0に戻す
     public void ResetScore()
     {
         currentScore = 0;

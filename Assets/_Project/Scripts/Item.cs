@@ -1,8 +1,8 @@
 using UnityEngine;
 
-/// <summary>
-/// プレイヤーが取得可能なアイテム（回復・パワーアップ等）の挙動を制御するクラス。
-/// </summary>
+// 回復やパワーアップなど、ドロップアイテム全般の動きを制御するクラス。
+// アイテムの種類ごとにわざわざ別のスクリプトを作ると管理が面倒になるので、
+// Enum（ItemType）を使って、インスペクタから手軽に種類を切り替えられるようにまとめている。
 public class Item : MonoBehaviour
 {
     public enum ItemType
@@ -17,10 +17,11 @@ public class Item : MonoBehaviour
 
     void Update()
     {
-        // フレームレートに依存しない一定速度での落下移動
+        // ひたすら下へ落ちていく
         transform.position += Vector3.down * moveSpeed * Time.deltaTime;
 
-        // 画面外（下部）到達時にリソース解放のため自身を破棄
+        // 取り逃がしたアイテムが画面外に溜まり続けてメモリを食いつぶすのを防ぐため、
+        // 見えなくなったら確実にDestroyして掃除する
         if (transform.position.y < -10.0f)
         {
             Destroy(gameObject);
@@ -33,20 +34,22 @@ public class Item : MonoBehaviour
         {
             Player player = collision.gameObject.GetComponent<Player>();
             
-            // プレイヤーコンポーネントの存在を確認してから種類に応じた効果を適用
+            // 【防衛的プログラミング】
+            // 万が一「Player」タグが付いているのにPlayerスクリプトが付いていない
+            // 想定外のオブジェクトに当たった場合でも、NullReferenceエラーで落ちないようにしておく。
             if (player != null)
             {
                 ApplyEffect(player);
             }
 
-            // 取得後は即座に自身を破棄
+            // 効果を与えたら自分自身は消滅する
             Destroy(gameObject);
         }
     }
 
-    /// <summary>
-    /// アイテム種別に基づいてプレイヤーへ効果を適用し、対応するSEを再生する。
-    /// </summary>
+    // アイテムの種類に応じて、Player側のメソッドを叩く。
+    // （※実際の回復処理やパワーアップの仕様はPlayerクラス側に書くことで、
+    // 　アイテム側がPlayerの内部実装を深く知らなくて済むように疎結合にしている）
     private void ApplyEffect(Player player)
     {
         switch (type)

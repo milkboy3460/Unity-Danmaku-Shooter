@@ -1,9 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-/// <summary>
-/// 選択中のUI要素（ImageやText等）を点滅させる演出コンポーネント
-/// </summary>
+// UI（ImageやText）を点滅させるコンポーネント。選択中のカーソル等で使う。
 public class BlinkEffect : MonoBehaviour
 {
     [SerializeField] private float blinkInterval = 0.2f; 
@@ -17,7 +15,7 @@ public class BlinkEffect : MonoBehaviour
 
     void OnEnable()
     {
-        // 非アクティブ時に透明のまま終了した際、次回表示時に消えたままになるのを防ぐ
+        // 透明なタイミングで非アクティブにされると、次に表示した時に消えたままになるのでリセットしておく
         ResetVisual();
     }
 
@@ -27,10 +25,10 @@ public class BlinkEffect : MonoBehaviour
 
         if (isSelected)
         {
-            // ポーズ画面など Time.timeScale == 0 の状態でも点滅アニメーションを維持するため、unscaledTime を使用
+            // ポーズ中（Time.timeScale == 0）でも点滅させたいので unscaledTime を使う
             bool isVisible = (Time.unscaledTime % (blinkInterval * 2)) < blinkInterval;
             
-            // UIの再描画負荷（Rebuild）を抑えるため、colorではなくCanvasRendererのAlphaを直接操作する
+            // colorを変更するとUIの再描画(Rebuild)が走って重くなるため、CanvasRendererのAlphaを直接いじる
             uiGraphic.canvasRenderer.SetAlpha(isVisible ? 1.0f : 0.0f);
         }
         else

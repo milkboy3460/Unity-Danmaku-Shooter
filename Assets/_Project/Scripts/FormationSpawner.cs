@@ -1,29 +1,26 @@
 using System.Collections;
 using UnityEngine;
 
-/// <summary>
-/// 敵の編隊（フォーメーション）を一定間隔で生成するウェーブ管理クラス。
-/// </summary>
+// 一定間隔でザコ敵の編隊（ウェーブ）を生成するクラス。
+// Update関数でタイマーを回すよりコルーチンの方がスッキリ書けるので、Startからループを回している。
 public class FormationSpawner : MonoBehaviour
 {
     [Header("Enemy Prefabs")]
-    [SerializeField] private GameObject enemyPrefabA; // 直進タイプ
-    [SerializeField] private GameObject enemyPrefabB; // 斜め移動タイプ
-    [SerializeField] private GameObject enemyPrefabC; // 波状移動（サインカーブ）タイプ
+    [SerializeField] private GameObject enemyPrefabA; // まっすぐ降りてくるやつ
+    [SerializeField] private GameObject enemyPrefabB; // 斜めに動くやつ
+    [SerializeField] private GameObject enemyPrefabC; // サインカーブでウネウネ動くやつ
 
     [Header("Spawn Settings")]
     [SerializeField] private float spawnInterval = 4.0f; 
-    [SerializeField] private float spawnY = 9.0f;        // 画面外上部の基準Y座標
+    [SerializeField] private float spawnY = 9.0f;        // 画面外（上）の出現位置ベース
 
     void Start()
     {
-        // 敵のスポーンサイクル（メインループ）を非同期で開始
+        // ゲーム開始と同時にスポーンのループ処理をスタート
         StartCoroutine(SpawnRoutine());
     }
 
-    /// <summary>
-    /// 設定されたインターバルに従い、ランダムなフォーメーションを展開し続けるメインルーチン。
-    /// </summary>
+    // ランダムなパターンの編隊を出し続けるメインループ
     private IEnumerator SpawnRoutine()
     {
         while (true) 
@@ -43,16 +40,15 @@ public class FormationSpawner : MonoBehaviour
                     break;
             }
 
-            // メインスレッドをブロックすることなく、指定秒数待機して次のウェーブへ移行
+            // ここで指定秒数待機してから次のループへ行く。
+            // （Update内でTime.deltaTimeを足し算して管理するより直感的でバグりにくい）
             yield return new WaitForSeconds(spawnInterval);
         }
     }
 
     #region Formation Patterns
 
-    /// <summary>
-    /// パターンA：横一列のフォーメーションを展開する。
-    /// </summary>
+    // パターンA：横一列に並んで同時に降りてくる
     private void SpawnLineFormation()
     {
         float[] xPositions = { -2.5f, 0f, 2.5f }; 
@@ -64,14 +60,13 @@ public class FormationSpawner : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// パターンB：V字型のフォーメーションを展開する。
-    /// Y座標のオフセットを利用することで、各機体の画面進入タイミングに時間差を生じさせる。
-    /// </summary>
+    // パターンB：シューティングのお約束、V字編隊
+    // 最初からVの字に並べてY座標（高さ）ごとズラしておくことで、
+    // プログラムで個別に待機時間を設定しなくても「時間差で画面に入ってくる」ようにしている。
     private void SpawnVFormation()
     {
         Vector2[] positions = {
-            new Vector2(0, 0),         // 先頭（中央）
+            new Vector2(0, 0),         // 先頭（中央）一番下なので最初に画面に入る
             new Vector2(-1.5f, 1.5f),  // 左翼・前
             new Vector2(1.5f, 1.5f),   // 右翼・前
             new Vector2(-3.0f, 3.0f),  // 左翼・後
@@ -85,9 +80,7 @@ public class FormationSpawner : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// パターンC：斜め一列のフォーメーションを展開する。
-    /// </summary>
+    // パターンC：斜め一列の編隊
     private void SpawnDiagonalFormation()
     {
         Vector2[] positions = {

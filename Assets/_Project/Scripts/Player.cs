@@ -1,10 +1,9 @@
 using UnityEngine;
 using System.Collections;
 
-/// <summary>
-/// プレイヤー（自機）の移動、攻撃、ライフ管理を制御するメインクラス。
-/// メモリ負荷を軽減するため、弾とエフェクトの生成・破棄は BulletManager を経由する設計に変更済。
-/// </summary>
+// プレイヤー（自機）の移動、攻撃、HP管理などを統括するメインクラス。
+// 弾幕ゲーで一番連射される「自機弾」によるメモリ負荷（GCスパイク）を防ぐため、
+// 弾やエフェクトはすべてBulletManager（オブジェクトプール）から借りる設計にリファクタリング済み。
 public class Player : MonoBehaviour
 {
     [Header("Movement Settings")]
@@ -54,12 +53,15 @@ public class Player : MonoBehaviour
 
     private void HandleMovement()
     {
+        // GetAxisRawを使うことで、入力に対して慣性がかからないキビキビした操作感にする
         float horizontal = Input.GetAxisRaw("Horizontal");
         float vertical = Input.GetAxisRaw("Vertical");
 
+        // 斜め移動時にルート2倍の速度になってしまうのを防ぐため正規化（normalized）する
         Vector3 direction = new Vector3(horizontal, vertical, 0).normalized;
         transform.position += direction * moveSpeed * Time.deltaTime;
 
+        // プレイヤーが画面外に逃げられないように座標をクランプ（制限）する
         float clampedX = Mathf.Clamp(transform.position.x, minX, maxX);
         float clampedY = Mathf.Clamp(transform.position.y, minY, maxY);
         transform.position = new Vector3(clampedX, clampedY, transform.position.z);
@@ -84,7 +86,9 @@ public class Player : MonoBehaviour
 
     private void Shoot()
     {
-        // 変更点: InstantiateとGetComponentを廃止し、GCアロケーション（メモリのゴミ）をゼロ化
+        // 【負荷対策】
+        // 以前はここでInstantiateとGetComponentをしていてメモリのゴミ（GC）が溜まっていたため、
+        // 毎回生成するのではなく、BulletManagerから「すでに用意されている弾」を借りる方式に変更した。
         if (BulletManager.Instance != null)
         {
             Bullet b = BulletManager.Instance.SpawnPlayerBullet(transform.position, Quaternion.identity);
@@ -99,11 +103,14 @@ public class Player : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D collision)
     {
+        // 無敵時間中、もしくはアイテム類に当たった場合はダメージ処理を行わない
         if (isInvincible || collision.gameObject.CompareTag("Item") || collision.gameObject.CompareTag("PowerUpItem")) return;
 
         if (collision.gameObject.CompareTag("Enemy") || collision.gameObject.CompareTag("EnemyBullet"))
         {
-            // 変更点: 敵弾はDestroyせず、非アクティブ化することでプールへ安全に返却させる
+            // 【重要】
+            // 敵の弾に当たった時、ここで弾をDestroyしてしまうとプール管理の仕様上エラーが起きるため、
+            // 「非アクティブにするだけ」に留めて、弾をプールへ返す処理自体は弾側のスクリプトに任せている。
             if (collision.gameObject.CompareTag("EnemyBullet")) 
             {
                 collision.gameObject.SetActive(false);
@@ -117,6 +124,7 @@ public class Player : MonoBehaviour
         currentHP -= damage;
         if (hpDisplay != null) hpDisplay.UpdateHP(currentHP);
 
+        // 被弾した重みを持たせるためのカメラシェイク演出
         if (CameraShake.instance != null) CameraShake.instance.Shake(0.3f, 0.2f);
         if (GameSoundManager.Instance != null) GameSoundManager.Instance.PlayDamageSound();
 
@@ -134,6 +142,7 @@ public class Player : MonoBehaviour
         }
     }
 
+    // ダメージ後の無敵時間（点滅演出）処理
     private IEnumerator DamageRoutine()
     {
         isInvincible = true;
@@ -152,7 +161,7 @@ public class Player : MonoBehaviour
 
     private void Die()
     {
-        // 変更点: 爆発エフェクトもプールから取得して再利用
+        // プレイヤーが死んだ時の爆発エフェクトも、重いのでいちいち作らずプールから引っ張ってくる
         if (BulletManager.Instance != null) 
         {
             BulletManager.Instance.SpawnExplosion(transform.position, Quaternion.identity);

@@ -1,9 +1,8 @@
 using UnityEngine;
 
-/// <summary>
-/// ゲーム全体のBGMとSEを統括するシングルトンマネージャー。
-/// BGM用とSE用でAudioSourceを分離し、効果音再生時のBGM途切れを防ぐ。
-/// </summary>
+// ゲーム全体の音（BGM・SE）を管理するシングルトン。
+// 初心者がよくやる「SEが鳴るたびにBGMが一瞬途切れるバグ」を防ぐため、
+// BGM用のスピーカー(AudioSource)とSE用のスピーカーを完全に分けて独立稼働させている。
 [RequireComponent(typeof(AudioSource))]
 public class GameSoundManager : MonoBehaviour
 {
@@ -32,10 +31,10 @@ public class GameSoundManager : MonoBehaviour
     [SerializeField] private AudioClip powerUpSound; 
     [SerializeField] private AudioClip healSound;    
 
-    // SE用のスピーカー（アタッチ済みのコンポーネントを使用）
+    // SE用のスピーカー（Inspectorでアタッチ済みのものを使う）
     private AudioSource seAudioSource;  
     
-    // BGM用のスピーカー（動的に生成して使用）
+    // BGM用のスピーカー（インスペクタの付け忘れバグを防ぐため、スクリプトから自動生成する）
     private AudioSource bgmAudioSource; 
 
     void Awake()
@@ -52,7 +51,8 @@ public class GameSoundManager : MonoBehaviour
 
         seAudioSource = GetComponent<AudioSource>();
 
-        // BGMとSEの同時再生（多重再生）を可能にするため、BGM専用のAudioSourceを動的に追加
+        // 【バグ対策】
+        // BGMとSEを同時に鳴らすため、BGM専用のAudioSourceを起動時に裏でこっそり追加する。
         bgmAudioSource = gameObject.AddComponent<AudioSource>();
         bgmAudioSource.loop = true;  
         bgmAudioSource.volume = 0.5f; 
@@ -74,10 +74,8 @@ public class GameSoundManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// ゲームオーバー時のBGM再生。
-    /// 既存のBGMを明示的に停止してから新しいクリップを再生し、音の重なりを防ぐ。
-    /// </summary>
+    // ゲームオーバー時のBGM切り替え。
+    // 古いBGMと新しいBGMが被ってカオスになるのを防ぐため、必ずStopを挟んでから流す。
     public void PlayGameOverBGM()
     {
         if (bgmAudioSource != null && gameOverBgm != null)
@@ -88,9 +86,7 @@ public class GameSoundManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// BGMの停止（ゲームオーバー演出のスローモーション時などに使用）
-    /// </summary>
+    // やられた瞬間のヒットストップ演出などで、音をピタッと止めたい時に使う
     public void StopBGM()
     {
         if (bgmAudioSource != null)
@@ -103,7 +99,9 @@ public class GameSoundManager : MonoBehaviour
 
     #region SE Playback Methods
     // ----------------------------------------------------------------------
-    // 注意：SEはすべて PlayOneShot を使用し、既存の音を止めずに重ねて再生する
+    // 【重要】
+    // 弾幕シューティングは尋常じゃない回数のSEが鳴るため、通常の Play() は使わない。
+    // 必ず PlayOneShot() を使い、既に鳴っている音を止めずに上から重ねて再生させる。
     // ----------------------------------------------------------------------
 
     public void PlayShootSound()

@@ -6,32 +6,26 @@ using System.Text;
 using System.Collections.Generic;
 
 #region Data Transfer Objects
+// サーバーとやり取りするためのデータ構造（DTO）。
+// JsonUtilityで自動変換できるよう [System.Serializable] を付けている。
 [System.Serializable]
-public class ScoreData
-{
-    public string name;
-    public int score;
-}
+public class ScoreData { public string playerName; public int score; }
 
 [System.Serializable]
-public class PlayerNameData
-{
-    public string name;
-}
+public class PlayerNameData { public string name; }
 
 [System.Serializable]
-public class PlayerStatsData
-{
-    public string name;
-    public int playCount;
-    public int highScore;
+public class PlayerStatsData 
+{ 
+    public string name; 
+    public int playCount; 
+    public int highScore; 
     public List<int> history; 
 }
 #endregion
 
-/// <summary>
-/// Unity標準のJsonUtilityでトップレベルの配列を扱うためのユーティリティ。
-/// </summary>
+// JsonUtilityで配列を直接扱えない（JSONのルートが配列だとパースエラーになる）という
+// Unity特有の罠を回避するためのヘルパークラス。
 public static class JsonHelper
 {
     public static T[] FromJson<T>(string json)
@@ -42,34 +36,28 @@ public static class JsonHelper
     }
 
     [System.Serializable]
-    private class Wrapper<T>
-    {
-        public T[] array;
-    }
+    private class Wrapper<T> { public T[] array; }
 }
 
-/// <summary>
-/// 外部サーバーのAPIと通信し、ランキングや戦績データの同期を管理するクラス。
-/// </summary>
+// サーバー通信のマネージャー。
+// 自作のJava/Spring Bootバックエンドと連携し、ランキング取得やスコア送信を行う。
 public class RankingNetworkManager : MonoBehaviour
 {
     [Header("Network Settings")]
     [SerializeField] private string baseUrl = "https://unity-tetris-server.onrender.com/api";
 
     [Header("Ranking UI References")]
-    [SerializeField] private TextMeshProUGUI[] rankingTexts; 
-    [SerializeField] private GameObject loadingPopup; 
+    [SerializeField] private TextMeshProUGUI[] rankingTexts;
+    [SerializeField] private GameObject loadingPopup;
 
     [Header("Stats UI References")]
     [SerializeField] private TextMeshProUGUI statsNameText;
     [SerializeField] private TextMeshProUGUI statsPlayCountText;
     [SerializeField] private TextMeshProUGUI statsHighScoreText;
     [SerializeField] private TextMeshProUGUI[] statsHistoryTexts;
-    [SerializeField] private GameObject statsLoadingPopup; 
+    [SerializeField] private GameObject statsLoadingPopup;
 
-    /// <summary>
-    /// プレイヤー名の新規登録。HTTP 409 (Conflict) を重複としてハンドリングする。
-    /// </summary>
+    // プレイヤー登録（POST）
     public void RegisterPlayer(string playerName, System.Action<bool> onResult)
     {
         StartCoroutine(RegisterPlayerCoroutine(playerName, onResult));
@@ -86,6 +74,10 @@ public class RankingNetworkManager : MonoBehaviour
         {
             byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
             request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            
+            // 【重要】
+            // Content-Typeを正しく送らないとサーバー側でJSONとして認識されず400エラーになるため明示的に設定。
+            request.uploadHandler.contentType = "application/json"; 
             request.downloadHandler = new DownloadHandlerBuffer();
             request.SetRequestHeader("Content-Type", "application/json");
 
@@ -93,41 +85,39 @@ public class RankingNetworkManager : MonoBehaviour
 
             if (loadingPopup != null) loadingPopup.SetActive(false);
 
-            // Javaバックエンド側で定義した重複エラー(409)を判定
-            if (request.responseCode == 409)
+            if (request.responseCode == 409) // 名前が重複している場合は登録不可
             {
-                onResult?.Invoke(false); 
+                onResult?.Invoke(false);
             }
             else if (request.result == UnityWebRequest.Result.Success)
             {
-                onResult?.Invoke(true); 
+                onResult?.Invoke(true);
             }
             else
             {
-                onResult?.Invoke(false); 
+                onResult?.Invoke(false);
             }
         }
     }
 
-    /// <summary>
-    /// ゲーム終了時の最終スコアを送信する。
-    /// </summary>
+    // スコア投稿（POST）
     public void PostFinalScore(int finalScore)
     {
         string playerName = PlayerNameManager.PlayerName;
-        if (string.IsNullOrEmpty(playerName)) playerName = "???";
+        if (string.IsNullOrEmpty(playerName)) playerName = "Guest";
         StartCoroutine(SendScoreCoroutine(playerName, finalScore));
     }
 
     private IEnumerator SendScoreCoroutine(string playerName, int score)
     {
-        ScoreData data = new ScoreData { name = playerName, score = score };
+        ScoreData data = new ScoreData { playerName = playerName, score = score };
         string json = JsonUtility.ToJson(data);
 
-        using (UnityWebRequest request = new UnityWebRequest($"{baseUrl}/scores", "POST"))
+        using (UnityWebRequest request = new UnityWebRequest($"{baseUrl}/score", "POST"))
         {
             byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
             request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            request.uploadHandler.contentType = "application/json";
             request.downloadHandler = new DownloadHandlerBuffer();
             request.SetRequestHeader("Content-Type", "application/json");
 
@@ -144,9 +134,7 @@ public class RankingNetworkManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// サーバーから全ランキングデータを取得し、UIを更新する。
-    /// </summary>
+    // ランキング取得（GET）
     public void FetchRanking()
     {
         StartCoroutine(GetRankingCoroutine());
@@ -157,7 +145,7 @@ public class RankingNetworkManager : MonoBehaviour
         if (loadingPopup != null) loadingPopup.SetActive(true);
         ClearRankingTexts();
 
-        using (UnityWebRequest request = UnityWebRequest.Get($"{baseUrl}/scores"))
+        using (UnityWebRequest request = UnityWebRequest.Get($"{baseUrl}/ranking"))
         {
             yield return request.SendWebRequest();
 
@@ -165,7 +153,7 @@ public class RankingNetworkManager : MonoBehaviour
 
             if (request.result != UnityWebRequest.Result.Success)
             {
-                ShowErrorText(); 
+                ShowErrorText();
             }
             else
             {
@@ -174,9 +162,7 @@ public class RankingNetworkManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 指定されたプレイヤーの詳細戦績を取得する。
-    /// </summary>
+    // 統計データ取得（GET）
     public void FetchPlayerStats(string playerName)
     {
         StartCoroutine(GetPlayerStatsCoroutine(playerName));
@@ -186,8 +172,11 @@ public class RankingNetworkManager : MonoBehaviour
     {
         if (statsLoadingPopup != null) statsLoadingPopup.SetActive(true);
 
-        // URLに含める名前を安全にエンコード（スペース等の考慮）
-        string encodedName = UnityWebRequest.EscapeURL(playerName);
+        if (string.IsNullOrEmpty(playerName)) playerName = "Guest";
+        
+        // 【重要】名前に記号が含まれる場合を想定してURLエンコードを行う
+        string encodedName = System.Uri.EscapeDataString(playerName);
+
         using (UnityWebRequest request = UnityWebRequest.Get($"{baseUrl}/players/{encodedName}/stats"))
         {
             yield return request.SendWebRequest();
@@ -227,12 +216,12 @@ public class RankingNetworkManager : MonoBehaviour
     {
         if (rankingTexts == null || rankingTexts.Length == 0) return;
         ScoreData[] scores = JsonHelper.FromJson<ScoreData>(json);
-        
+
         for (int i = 0; i < rankingTexts.Length; i++)
         {
             if (i < scores.Length)
             {
-                rankingTexts[i].text = $"{scores[i].name} - {scores[i].score}";
+                rankingTexts[i].text = $"{scores[i].playerName} - {scores[i].score}";
             }
             else
             {
@@ -249,7 +238,7 @@ public class RankingNetworkManager : MonoBehaviour
 
         if (statsHistoryTexts != null)
         {
-            for (int i = 0; i < statsHistoryTexts.Length; i++)
+            for (int i = 0; i < statsHistoryTexts.Length향; i++)
             {
                 if (stats.history != null && i < stats.history.Count)
                 {

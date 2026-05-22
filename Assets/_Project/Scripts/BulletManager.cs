@@ -1,12 +1,12 @@
 using UnityEngine;
 using UnityEngine.Pool;
 
-/// <summary>
-/// 弾とエフェクトのオブジェクトプールを一括管理するクラス。
-/// Instantiate/DestroyによるGCスパイクを防ぎ、パフォーマンスを安定させる目的で実装しています。
-/// </summary>
+// 弾と爆発エフェクトの「オブジェクトプール（使い回し）」をまとめて管理するクラス。
+// 弾幕ゲーで毎回Instantiate/Destroyを繰り返すと、GC（ゴミ集め）が走って画面が一瞬止まる
+// （GCスパイク）原因になるため、最初にまとめて作って再利用する方式をとっている。
 public class BulletManager : MonoBehaviour
 {
+    // どこからでも呼べるようにSingletonにしておく
     public static BulletManager Instance { get; private set; }
 
     [Header("Prefabs")]
@@ -16,7 +16,7 @@ public class BulletManager : MonoBehaviour
     [SerializeField] private BossBullet trueBossBulletPrefab;
     [SerializeField] private GameObject explosionPrefab;
 
-    // 外部からアクセスできるようプロパティ化
+    // 各プール。外部からも弾を借りれるようにプロパティにしておく
     public IObjectPool<Bullet> PlayerBulletPool { get; private set; }
     public IObjectPool<EnemyBullet> EnemyBulletPool { get; private set; }
     public IObjectPool<EnemyBullet> MidBossBulletPool { get; private set; } 
@@ -25,6 +25,7 @@ public class BulletManager : MonoBehaviour
 
     private void Awake()
     {
+        // シーン内にManagerが複数できないようにするお決まりの処理
         if (Instance == null) Instance = this;
         else
         {
@@ -37,7 +38,8 @@ public class BulletManager : MonoBehaviour
 
     private void InitializePools()
     {
-        // 自機弾
+        // 【自機弾プール】
+        // プレイヤーの連射速度と画面に残る弾数を考慮して、初期50個・最大200個に設定。
         PlayerBulletPool = new ObjectPool<Bullet>(
             createFunc: () => {
                 var bullet = Instantiate(playerBulletPrefab);
@@ -50,7 +52,8 @@ public class BulletManager : MonoBehaviour
             collectionCheck: false, defaultCapacity: 50, maxSize: 200
         );
 
-        // ザコ敵弾
+        // 【ザコ敵弾プール】
+        // ザコは複数同時に出るので少し多めに用意。
         EnemyBulletPool = new ObjectPool<EnemyBullet>(
             createFunc: () => {
                 var bullet = Instantiate(enemyBulletPrefab);
@@ -63,7 +66,9 @@ public class BulletManager : MonoBehaviour
             collectionCheck: false, defaultCapacity: 100, maxSize: 500
         );
 
-        // 中ボス弾（3色のスプライト切り替えを行うためザコと分離）
+        // 【中ボス弾プール】
+        // （ザコ弾と共有してもいいが、中ボスは弾の色を変える処理が入るため、
+        // 　バグ防止と管理のしやすさのためにプールを分けておく）
         MidBossBulletPool = new ObjectPool<EnemyBullet>(
             createFunc: () => {
                 var bullet = Instantiate(midBossBulletPrefab);
@@ -76,7 +81,8 @@ public class BulletManager : MonoBehaviour
             collectionCheck: false, defaultCapacity: 100, maxSize: 500
         );
 
-        // 真ボス弾
+        // 【真ボス弾プール】
+        // 真ボスは狂ったような弾幕を張るので、最大1000個まで許容する。
         TrueBossBulletPool = new ObjectPool<BossBullet>(
             createFunc: () => {
                 var bullet = Instantiate(trueBossBulletPrefab);
@@ -89,11 +95,13 @@ public class BulletManager : MonoBehaviour
             collectionCheck: false, defaultCapacity: 200, maxSize: 1000
         );
 
-        // 爆発エフェクト
+        // 【爆発エフェクトプール】
+        // 敵を倒したときに出るエフェクト。弾ほど大量には出ないので控えめに。
         ExplosionPool = new ObjectPool<GameObject>(
             createFunc: () => {
                 var effect = Instantiate(explosionPrefab);
                 var autoDestroy = effect.GetComponent<AutoDestroy>();
+                // 自動で消える（プールに帰る）コンポーネントに、帰還先を教えておく
                 if (autoDestroy != null) autoDestroy.SetPool(ExplosionPool); 
                 return effect;
             },
@@ -106,9 +114,12 @@ public class BulletManager : MonoBehaviour
 
     #region Spawn APIs
 
+    // ===== ここから下は、他のクラスから弾を借りる（発射する）時に呼ぶメソッド群 =====
+
     public Bullet SpawnPlayerBullet(Vector3 position, Quaternion rotation)
     {
         var bullet = PlayerBulletPool.Get();
+        // 借りてきた弾の位置と角度を、発射口に合わせる
         bullet.transform.SetPositionAndRotation(position, rotation);
         return bullet;
     }

@@ -1,20 +1,18 @@
 using UnityEngine;
 
-/// <summary>
-/// スコアに応じた中ボスの出現と、撃破数に基づく真ボスの出現を管理するスポナークラス。
-/// 真のボス撃破後は進行状況をリセットし、再び中ボスサイクルに移行する（無限ループ構造）。
-/// </summary>
+// スコアに応じて中ボスを出し、規定数倒したら真ボスを出すスポナー。
+// 真ボスを倒した後はまた中ボスから始まる（無限ループ仕様）。
 public class BossSpawner : MonoBehaviour
 {
     [Header("Mid Boss Settings")]
     [SerializeField] private GameObject midBossPrefab; 
-    [SerializeField] private int firstSpawnScore = 1000;   // 初回およびループ再開時の出現に必要な加算スコア
-    [SerializeField] private int nextSpawnInterval = 6000; // ★ボス撃破後、次の中ボスが出るまでに稼ぐ必要のあるスコア
+    [SerializeField] private int firstSpawnScore = 1000;   // 最初の1体目、またはループ再開時に必要なスコア
+    [SerializeField] private int nextSpawnInterval = 6000; // ボスを倒した後、次のボスが出るまでに稼ぐスコア
     [SerializeField] private Vector3 startPosition = new Vector3(0, 8.0f, 0);
 
     [Header("True Boss Settings")]
     [SerializeField] private GameObject trueBossPrefab; 
-    [SerializeField] private int requiredDefeats = 5;      // 真ボス出現までに必要な中ボスの規定撃破数
+    [SerializeField] private int requiredDefeats = 5;      // 真ボスを出すまでに必要な中ボスの撃破数
 
     private int nextTargetScore;
     private GameObject currentBoss;
@@ -31,10 +29,10 @@ public class BossSpawner : MonoBehaviour
 
     void Update()
     {
-        // フェーズ1：真のボス出現中
+        // 状態1：真ボスと戦闘中
         if (hasSpawnedTrueBoss)
         {
-            // 真のボス撃破（オブジェクト消滅）を検知してサイクルをリセット
+            // 真ボスを倒した（オブジェクトが消滅した）らサイクルを最初に戻す
             if (currentTrueBoss == null)
             {
                 Debug.Log("真のボス撃破！中ボスサイクルを再開します！");
@@ -43,7 +41,7 @@ public class BossSpawner : MonoBehaviour
                 defeatedCount = 0;          
                 wasBossAlive = false;
 
-                // ゲームテンポがダレるのを防ぐため、ループ再開時は初期の短い出現スパン（firstSpawnScore）を適用する
+                // ループ再開時、なかなか次のボスが出ないとテンポがダレるので初回用の短いスパンをセットする
                 if (ScoreManager.instance != null)
                 {
                     nextTargetScore = ScoreManager.instance.GetCurrentScore() + firstSpawnScore;
@@ -52,7 +50,7 @@ public class BossSpawner : MonoBehaviour
             return; 
         }
 
-        // フェーズ2：中ボスの撃破判定（生存状態からnullになった瞬間をエッジとして検知）
+        // 状態2：中ボスを倒した瞬間の判定（さっきまで生きてて、今nullになったら撃破とみなす）
         if (wasBossAlive && currentBoss == null)
         {
             wasBossAlive = false;
@@ -60,23 +58,23 @@ public class BossSpawner : MonoBehaviour
             
             Debug.Log($"中ボス撃破数: {defeatedCount} / {requiredDefeats}");
 
-            // 規定数に達したら真のボスをスポーンさせ、中ボスサイクルを一時中断する
+            // 規定数倒したら真ボスを出して、中ボスサイクルはお休み
             if (defeatedCount >= requiredDefeats)
             {
                 SpawnTrueBoss();
                 return; 
             }
 
-            // ★ここが重要な修正点★
-            // 「ボスが出現した時」ではなく、「ボスを倒した瞬間」のスコアを基準にして、
-            // 次の出現に必要な目標スコア（nextSpawnInterval分）を上乗せして設定します。
+            // ★連戦防止のための重要処理★
+            // 「ボスが出た時」ではなく「ボスを倒した瞬間」のスコアを基準に次回の目標スコアを設定する。
+            // これをやらないと、ボス戦中にザコを倒してスコアを稼ぎすぎた場合、ボス撃破直後に次のボスが即湧きしてしまう。
             if (ScoreManager.instance != null)
             {
                 nextTargetScore = ScoreManager.instance.GetCurrentScore() + nextSpawnInterval;
             }
         }
 
-        // フェーズ3：通常の中ボス出現判定（目標スコア到達時）
+        // 状態3：ボスがいなくて、目標スコアに達していたら中ボスを出す
         if (currentBoss == null && ScoreManager.instance != null && ScoreManager.instance.GetCurrentScore() >= nextTargetScore)
         {
             SpawnMidBoss();
@@ -90,8 +88,7 @@ public class BossSpawner : MonoBehaviour
             currentBoss = Instantiate(midBossPrefab, startPosition, Quaternion.identity);
             wasBossAlive = true; 
             
-            // ★変更点：ここにあった nextTargetScore の計算を、上の「撃破時」に移動しました。
-            // これにより、連戦を確実に防ぐことができます。
+            // （※以前はここで次の目標スコアを計算していたが、連戦バグの原因になるため撃破時の処理に移動した）
         }
     }
 

@@ -1,10 +1,8 @@
 using UnityEngine;
 using System.Collections;
 
-/// <summary>
-/// ゲームの最終目標である「真のボス」の挙動を制御するクラス。
-/// 数百発の弾を吐き出すため、BulletManagerによるプーリングが必須となる要塞。
-/// </summary>
+// ゲームのクライマックスである「真ボス」のクラス。
+// 画面を埋め尽くす弾幕を張るため、BulletManagerによるメモリ管理（プーリング）が必須。
 public class TrueBoss : MonoBehaviour
 {
     [Header("Status")]
@@ -26,20 +24,20 @@ public class TrueBoss : MonoBehaviour
     private int direction = 1;
 
     [Header("Bullet Hell Settings")]
-    public int ways = 6;             
-    public float fireRate = 0.05f;   
+    public int ways = 6;            
+    public float fireRate = 0.05f;  
     public float angleStep = 15f;    
-    public float bulletSpeed = 5f;   
+    public float bulletSpeed = 5f;  
     public int burstCount = 20;      
     public float restTime = 2.0f;    
     private float currentAngle = 0f;
     private Coroutine attackCoroutine; 
 
     [Header("Defeat Sequence Settings")]
-    [SerializeField] private GameObject finalExplosionPrefab; // 最終爆発専用プレハブ
+    [SerializeField] private GameObject finalExplosionPrefab; // 最後にドカンとやる専用プレハブ
     [SerializeField] private float defeatSequenceDuration = 2.5f; 
-    [SerializeField] private float explosionInterval = 0.1f;      
-    [SerializeField] private float finalExplosionScale = 4.0f;    
+    [SerializeField] private float explosionInterval = 0.1f;        
+    [SerializeField] private float finalExplosionScale = 4.0f;      
     
     private bool isDefeated = false; 
 
@@ -48,6 +46,7 @@ public class TrueBoss : MonoBehaviour
         currentHp = maxHp;
         spriteRenderer = GetComponent<SpriteRenderer>();
 
+        // ボスの当たり判定を画像の大きさに合わせて自動で調整する
         BoxCollider2D col = GetComponent<BoxCollider2D>();
         if (col != null && spriteRenderer.sprite != null)
         {
@@ -63,11 +62,13 @@ public class TrueBoss : MonoBehaviour
 
         if (!isReady)
         {
+            // まずは画面上から定位置まで降りてくる
             transform.position += Vector3.down * enterSpeed * Time.deltaTime;
             if (transform.position.y <= stopPositionY)
             {
                 transform.position = new Vector3(transform.position.x, stopPositionY, transform.position.z);
                 isReady = true; 
+                // 定位置に着いたら弾幕開始
                 attackCoroutine = StartCoroutine(SpiralAttackRoutine());
             }
         }
@@ -84,6 +85,7 @@ public class TrueBoss : MonoBehaviour
         else if (transform.position.x <= leftLimit) direction = 1;
     }
 
+    // 渦巻き状の弾幕を張るルーチン
     private IEnumerator SpiralAttackRoutine()
     {
         while (!isDefeated)
@@ -97,9 +99,10 @@ public class TrueBoss : MonoBehaviour
                     for (int i = 0; i < ways; i++)
                     {
                         float angle = currentAngle + (360f / ways) * i;
-                        Quaternion rotation = Quaternion.Euler(0, 0, angle + 180f); 
+                        Quaternion rotation = Quaternion.Euler(0, 0, angle + 180f);
                         
-                        // 変更点: Nway弾をすべてプールから展開し、GCを回避
+                        // 【負荷対策】
+                        // ここで大量にInstantiateするとゲームが止まるので、BulletManagerのプールから借りる。
                         BossBullet bulletScript = BulletManager.Instance.SpawnTrueBossBullet(transform.position, rotation);
                         bulletScript.speed = bulletSpeed;
                     }
@@ -110,6 +113,7 @@ public class TrueBoss : MonoBehaviour
 
                 yield return new WaitForSeconds(fireRate); 
             }
+            // 撃ち終わったら少し休憩してリズムを作る
             yield return new WaitForSeconds(restTime);
         }
     }
@@ -120,7 +124,6 @@ public class TrueBoss : MonoBehaviour
 
         if (collision.gameObject.CompareTag("PlayerBullet"))
         {
-            // 自機弾の非アクティブ化
             collision.gameObject.SetActive(false);
             currentHp--;
 
@@ -136,6 +139,7 @@ public class TrueBoss : MonoBehaviour
         }
     }
 
+    // 撃破時の爆発演出シーケンス
     private IEnumerator DefeatSequence()
     {
         isDefeated = true; 
@@ -151,7 +155,8 @@ public class TrueBoss : MonoBehaviour
 
         if (CameraShake.instance != null) CameraShake.instance.Shake(defeatSequenceDuration, 0.1f);
 
-        // フェーズ1：ランダム誘爆（ここはプールを使う）
+        // フェーズ1：ランダム誘爆
+        // ここは爆発エフェクトをバシバシ出すのでプールを使う
         while (timer < defeatSequenceDuration)
         {
             Vector2 randomPos = new Vector2(
@@ -176,7 +181,9 @@ public class TrueBoss : MonoBehaviour
         // フェーズ2：最終爆発
         if (CameraShake.instance != null) CameraShake.instance.Shake(1.0f, 0.5f);
 
-        // 注意: 最終爆発はスケールを巨大化させるため、プールを汚染しないよう個別にInstantiateする
+        // 【設計判断】
+        // 最終爆発だけは「巨大化（localScale変更）」させるため、プールを汚染しないよう
+        // あえてプールを使わずにその場でInstantiateしている。
         if (finalExplosionPrefab != null)
         {
             GameObject finalEx = Instantiate(finalExplosionPrefab, transform.position, Quaternion.identity);

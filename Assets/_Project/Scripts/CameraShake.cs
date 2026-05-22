@@ -1,10 +1,8 @@
 using UnityEngine;
 using System.Collections;
 
-/// <summary>
-/// 画面揺れ（カメラシェイク）演出を管理するシングルトンクラス。
-/// ボス撃破時や被弾時などの視覚的フィードバックとして使用する。
-/// </summary>
+// 画面揺らし（カメラシェイク）用のシングルトン。
+// 被弾時やボス撃破時の「ヒット感」や「ダメージ感」を出してUX（手触り）を良くするためのもの。
 public class CameraShake : MonoBehaviour
 {
     public static CameraShake instance;
@@ -17,21 +15,19 @@ public class CameraShake : MonoBehaviour
         if (instance == null) instance = this;
     }
 
-    /// <summary>
-    /// カメラシェイクを実行する。
-    /// </summary>
-    /// <param name="duration">揺れる時間（秒）</param>
-    /// <param name="magnitude">揺れの振幅（激しさ）</param>
+    // 外部から「揺れる秒数」と「激しさ」を指定してカメラを揺らす
     public void Shake(float duration, float magnitude)
     {
-        // 連続で呼ばれた際、コルーチンが重複して不自然な挙動になるのを防ぐ
+        // 【バグ対策】
+        // 連続でダメージを食らった時などに何度もShakeが呼ばれると、コルーチンが多重起動して
+        // カメラがとんでもない勢いで吹っ飛んでいくため、実行中の揺れがあれば強制キャンセルする。
         if (shakeCoroutine != null) StopCoroutine(shakeCoroutine);
         shakeCoroutine = StartCoroutine(DoShake(duration, magnitude));
     }
 
     private IEnumerator DoShake(float duration, float magnitude)
     {
-        // 揺れ終わった後に正確な位置へ戻すため、開始時のローカル座標をキャッシュしておく
+        // 揺れ終わったあとにキッチリ元の位置に戻すため、開始時のローカル座標をメモっておく
         originalPos = transform.localPosition; 
         float elapsed = 0f;
 
@@ -46,7 +42,9 @@ public class CameraShake : MonoBehaviour
             yield return null; 
         }
 
-        // カメラの座標ズレ（ドリフト）を確実に防ぐため、ループ終了後に必ず元の位置にリセットする
+        // 【超重要】
+        // これを忘れると、計算の誤差が蓄積してカメラがどんどん明後日の方向に
+        // ズレていく（ドリフト現象）ので、最後は必ず元の位置に強制リセットする。
         transform.localPosition = originalPos;
     }
 }

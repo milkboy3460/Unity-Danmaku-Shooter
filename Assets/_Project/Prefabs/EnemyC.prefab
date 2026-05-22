@@ -166,5 +166,5 @@ MonoBehaviour:
   scoreValue: 100
   healItemPrefab: {fileID: 4483487593388463640, guid: 214420496b1baf041bacdf96bac552c3, type: 3}
   powerUpItemPrefab: {fileID: 5590488297446864661, guid: a6161107621579e4d9d647386dd4971e, type: 3}
-  healDropChance: 100
-  powerUpDropChance: 0
+  healDropChance: 20
+  powerUpDropChance: 20
